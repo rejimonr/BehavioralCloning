@@ -1,3 +1,4 @@
+###Original drive.py with only one modification to include the preprocessing of image before sending to prediction
 import argparse
 import base64
 from datetime import datetime
@@ -15,11 +16,25 @@ from io import BytesIO
 from keras.models import load_model
 import h5py
 from keras import __version__ as keras_version
+import cv2
 
 sio = socketio.Server()
 app = Flask(__name__)
 model = None
 prev_image_array = None
+
+##Same method from model.py. Called before image is used for prediction
+def preprocess(img):
+    #Crop the top part
+    new_img = img[50:140,:,:]
+    #print("cropping")
+    # scale to 66x200x3 (same as nVidia)
+    new_img = cv2.resize(new_img,(200, 66), interpolation = cv2.INTER_AREA)
+    #print("resizing")
+    #Convert to YUV space
+    new_img = cv2.cvtColor(new_img, cv2.COLOR_RGB2YUV)
+    return new_img
+
 
 
 class SimplePIController:
@@ -61,6 +76,9 @@ def telemetry(sid, data):
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
+        #Added the below preprocess step to mimic the model inputs
+        image_array=preprocess(image_array)
+        
         steering_angle = float(model.predict(image_array[None, :, :, :], batch_size=1))
 
         throttle = controller.update(float(speed))
